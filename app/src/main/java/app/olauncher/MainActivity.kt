@@ -1,7 +1,6 @@
 package app.olauncher
 
 import android.annotation.SuppressLint
-import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ActivityInfo
@@ -9,11 +8,12 @@ import android.content.res.Configuration
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
-import android.view.View
 import android.view.WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
 import androidx.activity.OnBackPressedCallback
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AppCompatDelegate
+import androidx.core.view.isVisible
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.NavController
@@ -33,6 +33,12 @@ class MainActivity : AppCompatActivity() {
     private lateinit var viewModel: MainViewModel
     private lateinit var binding: ActivityMainBinding
     private var timerJob: Job? = null
+
+    private val launcherSelectorActivityResultLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        if (result.resultCode == RESULT_OK) {
+            resetLauncherViaFakeActivity()
+        }
+    }
 
     override fun attachBaseContext(context: Context) {
         val newConfig = Configuration(context.resources.configuration)
@@ -70,8 +76,8 @@ class MainActivity : AppCompatActivity() {
             override fun handleOnBackPressed() {
                 if (navController.currentDestination?.id != R.id.mainFragment) {
                     navController.popBackStack()
-                } else if (binding.messageLayout.visibility == View.VISIBLE) {
-                    binding.messageLayout.visibility = View.GONE
+                } else if (binding.messageLayout.isVisible) {
+                    binding.messageLayout.isVisible = false
                 }
             }
         })
@@ -120,7 +126,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun initClickListeners() {
         binding.ivClose.setOnClickListener {
-            binding.messageLayout.visibility = View.GONE
+            binding.messageLayout.isVisible = false
         }
     }
 
@@ -135,7 +141,7 @@ class MainActivity : AppCompatActivity() {
             if (isDefaultLauncher() || Build.VERSION.SDK_INT < Build.VERSION_CODES.Q)
                 resetLauncherViaFakeActivity()
             else
-                showLauncherSelector(Constants.REQUEST_CODE_LAUNCHER_SELECTOR)
+                showLauncherSelector(launcherSelectorActivityResultLauncher)
         }
 
         viewModel.showDialog.observe(this) { dialogType ->
@@ -203,9 +209,9 @@ class MainActivity : AppCompatActivity() {
         binding.tvAction.text = getString(action)
         binding.tvAction.setOnClickListener {
             clickListener?.invoke()
-            binding.messageLayout.visibility = View.GONE
+            binding.messageLayout.isVisible = false
         }
-        binding.messageLayout.visibility = View.VISIBLE
+        binding.messageLayout.isVisible = true
     }
 
     @SuppressLint("SourceLockedOrientationActivity")
@@ -216,7 +222,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun backToHomeScreen() {
-        binding.messageLayout.visibility = View.GONE
+        binding.messageLayout.isVisible = false
         if (navController.currentDestination?.id != R.id.mainFragment)
             navController.popBackStack(R.id.mainFragment, false)
     }
@@ -247,19 +253,6 @@ class MainActivity : AppCompatActivity() {
                 else -> false
             }
             if (shouldRestart) restartLauncherOrCheckTheme(true)
-        }
-    }
-
-    @Deprecated("Deprecated in Java")
-    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        super.onActivityResult(requestCode, resultCode, data)
-        when (requestCode) {
-            Constants.REQUEST_CODE_ENABLE_ADMIN -> {
-                if (resultCode == Activity.RESULT_OK) prefs.lockModeOn = true
-            }
-            Constants.REQUEST_CODE_LAUNCHER_SELECTOR -> {
-                if (resultCode == Activity.RESULT_OK) resetLauncherViaFakeActivity()
-            }
         }
     }
 }

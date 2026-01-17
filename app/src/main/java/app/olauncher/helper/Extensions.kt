@@ -10,13 +10,13 @@ import android.content.Intent
 import android.content.pm.LauncherApps
 import android.content.pm.PackageManager
 import android.content.res.Resources
-import android.net.Uri
 import android.os.Build
 import android.os.UserHandle
 import android.provider.Settings
 import android.view.View
 import android.view.WindowManager
 import android.view.inputmethod.InputMethodManager
+import androidx.activity.result.ActivityResultLauncher
 import androidx.annotation.RequiresApi
 import app.olauncher.BuildConfig
 import app.olauncher.R
@@ -30,21 +30,22 @@ fun View.hideKeyboard() {
 }
 
 fun View.showKeyboard(show: Boolean = true) {
-    if (show.not()) return
-    if (this.requestFocus())
+    if (!show) return
+    if (this.requestFocus()) {
         postDelayed({
             val imm = context.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
-            imm.toggleSoftInput(InputMethodManager.SHOW_FORCED, InputMethodManager.HIDE_IMPLICIT_ONLY)
+            imm.showSoftInput(this, InputMethodManager.SHOW_IMPLICIT)
         }, 100)
+    }
 }
 
 
 @RequiresApi(Build.VERSION_CODES.Q)
-fun Activity.showLauncherSelector(requestCode: Int) {
+fun Activity.showLauncherSelector(launcher: ActivityResultLauncher<Intent>) {
     val roleManager = getSystemService(Context.ROLE_SERVICE) as RoleManager
     if (roleManager.isRoleAvailable(RoleManager.ROLE_HOME)) {
         val intent = roleManager.createRequestRoleIntent(RoleManager.ROLE_HOME)
-        startActivityForResult(intent, requestCode)
+        launcher.launch(intent)
     } else
         resetDefaultLauncher()
 }
@@ -89,27 +90,13 @@ fun Context.openSearch(query: String? = null) {
 
 fun Context.isEinkDisplay(): Boolean {
     return try {
-        val windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
-        windowManager.defaultDisplay.refreshRate <= Constants.MIN_ANIM_REFRESH_RATE
-    } catch (e: Exception) {
-        e.printStackTrace()
-        false
-    }
-}
-
-fun Context.searchOnPlayStore(query: String? = null): Boolean {
-    return try {
-        startActivity(
-            Intent(
-                Intent.ACTION_VIEW,
-                Uri.parse("https://play.google.com/store/search?q=$query&c=apps")
-            ).addFlags(
-                Intent.FLAG_ACTIVITY_NO_HISTORY or
-                        Intent.FLAG_ACTIVITY_NEW_DOCUMENT or
-                        Intent.FLAG_ACTIVITY_MULTIPLE_TASK
-            )
-        )
-        true
+        val display = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            display
+        } else {
+            @Suppress("DEPRECATION")
+            (getSystemService(Context.WINDOW_SERVICE) as WindowManager).defaultDisplay
+        }
+        (display?.refreshRate ?: 60f) <= Constants.MIN_ANIM_REFRESH_RATE
     } catch (e: Exception) {
         e.printStackTrace()
         false
