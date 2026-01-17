@@ -84,6 +84,22 @@ class Prefs(context: Context) {
     fun getAppUser(index: Int): String = prefs.getString("APP_USER_$index", "") ?: ""
     fun getAppActivityClassName(index: Int): String = prefs.getString("APP_ACTIVITY_CLASS_NAME_$index", "") ?: ""
 
+    fun setSideApp(index: Int, app: AppModel) {
+        prefs.edit {
+            putString("SIDE_APP_NAME_$index", app.appLabel)
+            putString("SIDE_APP_PACKAGE_$index", app.appPackage)
+            putString("SIDE_APP_USER_$index", app.user.toString())
+            putString("SIDE_APP_ACTIVITY_CLASS_NAME_$index", app.activityClassName)
+        }
+    }
+
+    fun getSideAppName(index: Int): String = prefs.getString("SIDE_APP_NAME_$index", "") ?: ""
+    fun getSideAppPackage(index: Int): String = prefs.getString("SIDE_APP_PACKAGE_$index", "") ?: ""
+    fun getSideAppUser(index: Int): String = prefs.getString("SIDE_APP_USER_$index", "") ?: ""
+    fun getSideAppActivityClassName(index: Int): String = prefs.getString("SIDE_APP_ACTIVITY_CLASS_NAME_$index", "") ?: ""
+
+    var sideAppsOrder by string("SIDE_APPS_ORDER", "1,2,3,4,5,6,7")
+
     fun getAppRenameLabel(appPackage: String): String =
         prefs.getString("RENAME_$appPackage", null) ?: prefs.getString(appPackage, "") ?: ""
 

@@ -25,6 +25,9 @@ import androidx.fragment.app.Fragment
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.fragment.findNavController
+import androidx.recyclerview.widget.ItemTouchHelper
+import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.RecyclerView
 import app.olauncher.MainViewModel
 import app.olauncher.R
 import app.olauncher.data.AppModel
@@ -44,6 +47,7 @@ class HomeFragment : Fragment(), View.OnClickListener, View.OnLongClickListener 
     private lateinit var prefs: Prefs
     private lateinit var viewModel: MainViewModel
     private lateinit var deviceManager: DevicePolicyManager
+    private lateinit var sideAppsAdapter: SideAppsAdapter
 
     private var _binding: FragmentHomeBinding? = null
     private val binding get() = _binding!!
@@ -73,13 +77,15 @@ class HomeFragment : Fragment(), View.OnClickListener, View.OnLongClickListener 
         setHomeAlignment(prefs.homeAlignment)
         initSwipeTouchListeners()
         initClickListeners()
+        setupSideApps()
     }
 
     override fun onResume() {
         super.onResume()
-        populateHomeScreen(false)
+        populateHomeScreen()
         viewModel.isOlauncherDefault()
         if (prefs.showStatusBar) showStatusBar() else hideStatusBar()
+        sideAppsAdapter.updateData()
     }
 
     override fun onClick(view: View) {
@@ -145,7 +151,7 @@ class HomeFragment : Fragment(), View.OnClickListener, View.OnLongClickListener 
         binding.firstRunTips.isVisible = prefs.firstSettingsOpen
         if (prefs.firstSettingsOpen) binding.setDefaultLauncher.visibility = View.GONE
 
-        viewModel.refreshHome.observe(viewLifecycleOwner) { populateHomeScreen(it) }
+        viewModel.refreshHome.observe(viewLifecycleOwner) { populateHomeScreen() }
         
         viewModel.isOlauncherDefault.observe(viewLifecycleOwner) { isDefault ->
             if (isDefault != true) {
@@ -228,37 +234,53 @@ class HomeFragment : Fragment(), View.OnClickListener, View.OnLongClickListener 
         binding.tvScreenTime.setPadding(10.dpToPx())
     }
 
-    private fun populateHomeScreen(appCountUpdated: Boolean) {
-        if (appCountUpdated) homeAppViews.forEach { it.isVisible = false }
-        populateDateTime()
+    private fun populateHomeScreen() {
+        // 1. UI-Komponenten sicherstellen
+        if (_binding == null) return 
 
+        populateDateTime()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) populateScreenTime()
 
-        val homeAppsNum = prefs.homeAppsNum
-        homeAppViews.forEachIndexed { index, textView ->
+        // WICHTIG: Liste hier explizit sicherstellen, falls sie verloren ging
+        val currentHomeAppViews = listOf(
+            binding.homeApp1, binding.homeApp2, binding.homeApp3, binding.homeApp4,
+            binding.homeApp5, binding.homeApp6, binding.homeApp7, binding.homeApp8
+        )
+
+        // 2. Gewünschte Anzahl aus den Prefs holen (z.B. 8)
+        val totalSlotsToShow = prefs.homeAppsNum 
+
+        // 3. Alle 8 möglichen Slots durchlaufen
+        currentHomeAppViews.forEachIndexed { index, textView ->
             val position = index + 1
-            if (position <= homeAppsNum) {
-                textView.isVisible = true
-                val appName = prefs.getAppName(position)
-                val appPackage = prefs.getAppPackage(position)
-                val appUser = prefs.getAppUser(position)
+            
+            if (position <= totalSlotsToShow) {
+                // Dieser Slot soll angezeigt werden
+                textView.visibility = View.VISIBLE
                 
-                val userHandle = getUserHandleFromString(requireContext(), appUser)
-                if (requireContext().isPackageInstalled(appPackage, userHandle)) {
-                    textView.text = appName
+                val name = prefs.getAppName(position)
+                if (name.isBlank()) {
+                    textView.text = getString(R.string.app) // Platzhalter aus Ressourcen
                 } else {
-                    textView.text = ""
+                    textView.text = name
                 }
+                
+                // Klick-Listener auffrischen
+                textView.setOnClickListener { homeAppClicked(position) }
+                textView.setOnLongClickListener(this)
             } else {
-                textView.isVisible = false
+                // Dieser Slot ist deaktiviert (z.B. wenn nur 4 Apps gewählt wurden)
+                textView.visibility = View.GONE
             }
         }
+
+        if (::sideAppsAdapter.isInitialized) sideAppsAdapter.updateData()
     }
 
     private fun homeAppClicked(location: Int) {
         val appName = prefs.getAppName(location)
         if (appName.isEmpty()) {
-            requireContext().showToast(R.string.long_press_to_select_app)
+            showAppList(location, rename = false, includeHiddenApps = true)
         } else {
             launchApp(
                 appName,
@@ -267,6 +289,53 @@ class HomeFragment : Fragment(), View.OnClickListener, View.OnLongClickListener 
                 prefs.getAppUser(location)
             )
         }
+    }
+
+    private fun sideAppClicked(index: Int) {
+        val packageName = prefs.getSideAppPackage(index)
+        if (packageName.isEmpty()) {
+            showAppList(flag = Constants.FLAG_SET_SIDE_APP_1 + index - 1, rename = false, includeHiddenApps = true)
+        } else {
+            launchApp(
+                prefs.getSideAppName(index),
+                packageName,
+                prefs.getSideAppActivityClassName(index),
+                prefs.getSideAppUser(index)
+            )
+        }
+    }
+
+    private fun setupSideApps() {
+        sideAppsAdapter = SideAppsAdapter(prefs, { index ->
+            sideAppClicked(index)
+        }, { index ->
+            showAppList(flag = Constants.FLAG_SET_SIDE_APP_1 + index - 1, rename = false, includeHiddenApps = true)
+        })
+
+        binding.rvSideApps.layoutManager = LinearLayoutManager(requireContext())
+        binding.rvSideApps.adapter = sideAppsAdapter
+
+        val itemTouchHelper = ItemTouchHelper(object : ItemTouchHelper.SimpleCallback(ItemTouchHelper.UP or ItemTouchHelper.DOWN, 0) {
+            override fun onMove(recyclerView: RecyclerView, viewHolder: RecyclerView.ViewHolder, target: RecyclerView.ViewHolder): Boolean {
+                sideAppsAdapter.onItemMoved(viewHolder.bindingAdapterPosition, target.bindingAdapterPosition)
+                return true
+            }
+
+            override fun onSwiped(viewHolder: RecyclerView.ViewHolder, direction: Int) {}
+            
+            override fun onSelectedChanged(viewHolder: RecyclerView.ViewHolder?, actionState: Int) {
+                super.onSelectedChanged(viewHolder, actionState)
+                if (actionState == ItemTouchHelper.ACTION_STATE_DRAG) {
+                    viewHolder?.itemView?.alpha = 0.5f
+                }
+            }
+
+            override fun clearView(recyclerView: RecyclerView, viewHolder: RecyclerView.ViewHolder) {
+                super.clearView(recyclerView, viewHolder)
+                viewHolder.itemView.alpha = 1.0f
+            }
+        })
+        itemTouchHelper.attachToRecyclerView(binding.rvSideApps)
     }
 
     private fun launchApp(appName: String, packageName: String, activityClassName: String?, userString: String) {

@@ -69,6 +69,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 refreshHome(false)
             }
 
+            in Constants.FLAG_SET_SIDE_APP_1..Constants.FLAG_SET_SIDE_APP_7 -> {
+                val index = flag - Constants.FLAG_SET_SIDE_APP_1 + 1
+                prefs.setSideApp(index, appModel)
+                refreshHome(false)
+            }
+
             Constants.FLAG_SET_SWIPE_LEFT_APP -> {
                 prefs.appNameSwipeLeft = appModel.appLabel
                 prefs.appPackageSwipeLeft = appModel.appPackage

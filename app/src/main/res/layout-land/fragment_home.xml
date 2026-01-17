@@ -165,6 +165,16 @@
 
     </LinearLayout>
 
+    <!-- Side icons -->
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/rvSideApps"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="end|center_vertical"
+        android:layout_marginEnd="20dp"
+        android:overScrollMode="never"
+        tools:listitem="@layout/adapter_side_app" />
+
     <TextView
         android:id="@+id/firstRunTips"
         style="@style/TextSmall"

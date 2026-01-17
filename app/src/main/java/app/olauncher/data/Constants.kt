@@ -79,6 +79,9 @@ object Constants {
     const val FLAG_SET_CLOCK_APP = 13
     const val FLAG_SET_CALENDAR_APP = 14
 
+    const val FLAG_SET_SIDE_APP_1 = 21
+    const val FLAG_SET_SIDE_APP_7 = 27
+
     const val HINT_RATE_US = 15
 
     const val LONG_PRESS_DELAY_MS = 500L

@@ -1,10 +1,12 @@
 package app.olauncher.ui
 
+import android.content.Context
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.view.animation.AnimationUtils
+import android.view.inputmethod.InputMethodManager
 import android.widget.TextView
 import androidx.appcompat.widget.SearchView
 import androidx.fragment.app.Fragment
@@ -49,6 +51,10 @@ class AppDrawerFragment : Fragment() {
         initAdapter()
         initObservers()
         initClickListeners()
+        
+        if (flag == Constants.FLAG_LAUNCH_APP) {
+            showKeyboardWithFocus()
+        }
     }
 
     private fun initViews() {
@@ -209,7 +215,7 @@ class AppDrawerFragment : Fragment() {
                     if (!recyclerView.canScrollVertically(1)) {
                         binding.search.hideKeyboard()
                     } else if (!recyclerView.canScrollVertically(-1)) {
-                        if (!onTop && !isRemoving) binding.search.showKeyboard(prefs.autoShowKeyboard)
+                        if (!onTop && !isRemoving) showKeyboardWithFocus()
                     }
                 }
             }
@@ -221,9 +227,26 @@ class AppDrawerFragment : Fragment() {
         if (flag == Constants.FLAG_LAUNCH_APP) viewModel.checkForMessages()
     }
 
-    override fun onStart() {
-        super.onStart()
-        binding.search.showKeyboard(prefs.autoShowKeyboard)
+    private fun showKeyboardWithFocus() {
+        if (prefs.autoShowKeyboard) {
+            binding.search.post {
+                val searchEditText = binding.search.findViewById<View>(androidx.appcompat.R.id.search_src_text)
+                searchEditText?.requestFocus()
+                binding.search.postDelayed({
+                    if (isAdded && !isRemoving) {
+                        val imm = requireContext().getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+                        imm.showSoftInput(searchEditText ?: binding.search, InputMethodManager.SHOW_IMPLICIT)
+                    }
+                }, 200)
+            }
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (flag == Constants.FLAG_LAUNCH_APP) {
+            showKeyboardWithFocus()
+        }
     }
 
     override fun onStop() {
