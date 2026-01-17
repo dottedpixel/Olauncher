@@ -1,5 +1,6 @@
 package app.olauncher.ui
 
+import android.app.Activity
 import android.app.admin.DevicePolicyManager
 import android.content.ComponentName
 import android.content.Context
@@ -14,6 +15,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.WindowInsets
 import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.os.bundleOf
 import androidx.core.view.isVisible
@@ -49,6 +51,13 @@ class SettingsFragment : Fragment(), View.OnClickListener, View.OnLongClickListe
 
     private var _binding: FragmentSettingsBinding? = null
     private val binding get() = _binding!!
+
+    private val adminActivityResultLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            prefs.lockModeOn = true
+            populateLockSettings()
+        }
+    }
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
         _binding = FragmentSettingsBinding.inflate(inflater, container, false)
@@ -406,7 +415,7 @@ class SettingsFragment : Fragment(), View.OnClickListener, View.OnLongClickListe
                     DevicePolicyManager.EXTRA_ADD_EXPLANATION,
                     getString(R.string.admin_permission_message)
                 )
-                requireActivity().startActivityForResult(intent, Constants.REQUEST_CODE_ENABLE_ADMIN)
+                adminActivityResultLauncher.launch(intent)
             }
         }
         populateLockSettings()
@@ -638,7 +647,7 @@ class SettingsFragment : Fragment(), View.OnClickListener, View.OnLongClickListe
     }
 
     override fun onDestroy() {
-        viewModel.checkForMessages.call()
+        viewModel.checkForMessages()
         super.onDestroy()
     }
 }

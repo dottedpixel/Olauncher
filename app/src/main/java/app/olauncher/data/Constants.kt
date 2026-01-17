@@ -17,6 +17,8 @@ object Constants {
         const val KEYBOARD = "KEYBOARD"
         const val DIGITAL_WELLBEING = "DIGITAL_WELLBEING"
         const val PRO_MESSAGE = "PRO_MESSAGE"
+        const val NEW_YEAR = "NEW_YEAR"
+        const val NEW_YEAR_1 = "NEW_YEAR_1"
     }
 
     object UserState {
@@ -70,10 +72,6 @@ object Constants {
 
     const val WALL_TYPE_LIGHT = "light"
     const val WALL_TYPE_DARK = "dark"
-
-//    const val THEME_MODE_DARK = 0
-//    const val THEME_MODE_LIGHT = 1
-//    const val THEME_MODE_SYSTEM = 2
 
     const val FLAG_LAUNCH_APP = 100
     const val FLAG_HIDDEN_APPS = 101

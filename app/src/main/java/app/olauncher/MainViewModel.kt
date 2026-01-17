@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.pm.LauncherApps
 import android.os.UserHandle
 import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.viewModelScope
 import androidx.work.BackoffPolicy
@@ -17,110 +18,54 @@ import androidx.work.WorkManager
 import app.olauncher.data.AppModel
 import app.olauncher.data.Constants
 import app.olauncher.data.Prefs
-import app.olauncher.helper.SingleLiveEvent
-import app.olauncher.helper.WallpaperWorker
-import app.olauncher.helper.formattedTimeSpent
-import app.olauncher.helper.getAppsList
-import app.olauncher.helper.hasBeenMinutes
-import app.olauncher.helper.isOlauncherDefault
-import app.olauncher.helper.isPackageInstalled
-import app.olauncher.helper.showToast
+import app.olauncher.helper.*
 import app.olauncher.helper.usageStats.EventLogWrapper
 import kotlinx.coroutines.launch
 import java.util.Calendar
 import java.util.concurrent.TimeUnit
 
-
 class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val appContext by lazy { application.applicationContext }
     private val prefs = Prefs(appContext)
 
-    val firstOpen = MutableLiveData<Boolean>()
-    val refreshHome = MutableLiveData<Boolean>()
-    val toggleDateTime = MutableLiveData<Unit>()
-    val updateSwipeApps = MutableLiveData<Any>()
-    val appList = MutableLiveData<List<AppModel>?>()
-    val hiddenApps = MutableLiveData<List<AppModel>?>()
-    val isOlauncherDefault = MutableLiveData<Boolean>()
-    val launcherResetFailed = MutableLiveData<Boolean>()
-    val homeAppAlignment = MutableLiveData<Int>()
-    val screenTimeValue = MutableLiveData<String>()
+    private val _firstOpen = MutableLiveData<Boolean>()
+    val firstOpen: LiveData<Boolean> = _firstOpen
+
+    private val _refreshHome = MutableLiveData<Boolean>()
+    val refreshHome: LiveData<Boolean> = _refreshHome
+
+    val toggleDateTime = SingleLiveEvent<Unit>()
+    val updateSwipeApps = SingleLiveEvent<Unit>()
+
+    private val _appList = MutableLiveData<List<AppModel>?>()
+    val appList: LiveData<List<AppModel>?> = _appList
+
+    private val _hiddenApps = MutableLiveData<List<AppModel>?>()
+    val hiddenApps: LiveData<List<AppModel>?> = _hiddenApps
+
+    private val _isOlauncherDefault = MutableLiveData<Boolean>()
+    val isOlauncherDefault: LiveData<Boolean> = _isOlauncherDefault
+
+    private val _launcherResetFailed = MutableLiveData<Boolean>()
+    val launcherResetFailed: LiveData<Boolean> = _launcherResetFailed
+
+    private val _homeAppAlignment = MutableLiveData<Int>()
+    val homeAppAlignment: LiveData<Int> = _homeAppAlignment
+
+    private val _screenTimeValue = MutableLiveData<String>()
+    val screenTimeValue: LiveData<String> = _screenTimeValue
 
     val showDialog = SingleLiveEvent<String>()
-    val checkForMessages = SingleLiveEvent<Unit?>()
     val resetLauncherLiveData = SingleLiveEvent<Unit?>()
 
     fun selectedApp(appModel: AppModel, flag: Int) {
         when (flag) {
-            Constants.FLAG_LAUNCH_APP -> {
+            Constants.FLAG_LAUNCH_APP, Constants.FLAG_HIDDEN_APPS -> {
                 launchApp(appModel.appPackage, appModel.activityClassName, appModel.user)
             }
 
-            Constants.FLAG_HIDDEN_APPS -> {
-                launchApp(appModel.appPackage, appModel.activityClassName, appModel.user)
-            }
-
-            Constants.FLAG_SET_HOME_APP_1 -> {
-                prefs.appName1 = appModel.appLabel
-                prefs.appPackage1 = appModel.appPackage
-                prefs.appUser1 = appModel.user.toString()
-                prefs.appActivityClassName1 = appModel.activityClassName
-                refreshHome(false)
-            }
-
-            Constants.FLAG_SET_HOME_APP_2 -> {
-                prefs.appName2 = appModel.appLabel
-                prefs.appPackage2 = appModel.appPackage
-                prefs.appUser2 = appModel.user.toString()
-                prefs.appActivityClassName2 = appModel.activityClassName
-                refreshHome(false)
-            }
-
-            Constants.FLAG_SET_HOME_APP_3 -> {
-                prefs.appName3 = appModel.appLabel
-                prefs.appPackage3 = appModel.appPackage
-                prefs.appUser3 = appModel.user.toString()
-                prefs.appActivityClassName3 = appModel.activityClassName
-                refreshHome(false)
-            }
-
-            Constants.FLAG_SET_HOME_APP_4 -> {
-                prefs.appName4 = appModel.appLabel
-                prefs.appPackage4 = appModel.appPackage
-                prefs.appUser4 = appModel.user.toString()
-                prefs.appActivityClassName4 = appModel.activityClassName
-                refreshHome(false)
-            }
-
-            Constants.FLAG_SET_HOME_APP_5 -> {
-                prefs.appName5 = appModel.appLabel
-                prefs.appPackage5 = appModel.appPackage
-                prefs.appUser5 = appModel.user.toString()
-                prefs.appActivityClassName5 = appModel.activityClassName
-                refreshHome(false)
-            }
-
-            Constants.FLAG_SET_HOME_APP_6 -> {
-                prefs.appName6 = appModel.appLabel
-                prefs.appPackage6 = appModel.appPackage
-                prefs.appUser6 = appModel.user.toString()
-                prefs.appActivityClassName6 = appModel.activityClassName
-                refreshHome(false)
-            }
-
-            Constants.FLAG_SET_HOME_APP_7 -> {
-                prefs.appName7 = appModel.appLabel
-                prefs.appPackage7 = appModel.appPackage
-                prefs.appUser7 = appModel.user.toString()
-                prefs.appActivityClassName7 = appModel.activityClassName
-                refreshHome(false)
-            }
-
-            Constants.FLAG_SET_HOME_APP_8 -> {
-                prefs.appName8 = appModel.appLabel
-                prefs.appPackage8 = appModel.appPackage
-                prefs.appUser8 = appModel.user.toString()
-                prefs.appActivityClassName8 = appModel.activityClassName
+            in Constants.FLAG_SET_HOME_APP_1..Constants.FLAG_SET_HOME_APP_8 -> {
+                prefs.setHomeApp(flag, appModel)
                 refreshHome(false)
             }
 
@@ -128,46 +73,42 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 prefs.appNameSwipeLeft = appModel.appLabel
                 prefs.appPackageSwipeLeft = appModel.appPackage
                 prefs.appUserSwipeLeft = appModel.user.toString()
-                prefs.appActivityClassNameSwipeLeft = appModel.activityClassName
-                updateSwipeApps()
+                prefs.appActivityClassNameSwipeLeft = appModel.activityClassName ?: ""
+                updateSwipeApps.call()
             }
 
             Constants.FLAG_SET_SWIPE_RIGHT_APP -> {
                 prefs.appNameSwipeRight = appModel.appLabel
                 prefs.appPackageSwipeRight = appModel.appPackage
                 prefs.appUserSwipeRight = appModel.user.toString()
-                prefs.appActivityClassNameRight = appModel.activityClassName
-                updateSwipeApps()
+                prefs.appActivityClassNameRight = appModel.activityClassName ?: ""
+                updateSwipeApps.call()
             }
 
             Constants.FLAG_SET_CLOCK_APP -> {
                 prefs.clockAppPackage = appModel.appPackage
                 prefs.clockAppUser = appModel.user.toString()
-                prefs.clockAppClassName = appModel.activityClassName
+                prefs.clockAppClassName = appModel.activityClassName ?: ""
             }
 
             Constants.FLAG_SET_CALENDAR_APP -> {
                 prefs.calendarAppPackage = appModel.appPackage
                 prefs.calendarAppUser = appModel.user.toString()
-                prefs.calendarAppClassName = appModel.activityClassName
+                prefs.calendarAppClassName = appModel.activityClassName ?: ""
             }
         }
     }
 
     fun firstOpen(value: Boolean) {
-        firstOpen.postValue(value)
+        _firstOpen.postValue(value)
     }
 
     fun refreshHome(appCountUpdated: Boolean) {
-        refreshHome.value = appCountUpdated
+        _refreshHome.value = appCountUpdated
     }
 
     fun toggleDateTime() {
-        toggleDateTime.postValue(Unit)
-    }
-
-    private fun updateSwipeApps() {
-        updateSwipeApps.postValue(Unit)
+        toggleDateTime.call()
     }
 
     private fun launchApp(packageName: String, activityClassName: String?, userHandle: UserHandle) {
@@ -175,15 +116,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val activityInfo = launcher.getActivityList(packageName, userHandle)
 
         val component = if (activityClassName.isNullOrBlank()) {
-            // activityClassName will be null for hidden apps.
             when (activityInfo.size) {
                 0 -> {
                     appContext.showToast(appContext.getString(R.string.app_not_found))
                     return
                 }
-
                 1 -> ComponentName(packageName, activityInfo[0].name)
-                else -> ComponentName(packageName, activityInfo[activityInfo.size - 1].name)
+                else -> ComponentName(packageName, activityInfo.last().name)
             }
         } else {
             ComponentName(packageName, activityClassName)
@@ -191,31 +130,29 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
         try {
             launcher.startMainActivity(component, userHandle, null, null)
-        } catch (e: SecurityException) {
+        } catch (_: Exception) {
             try {
                 launcher.startMainActivity(component, android.os.Process.myUserHandle(), null, null)
-            } catch (e: Exception) {
+            } catch (_: Exception) {
                 appContext.showToast(appContext.getString(R.string.unable_to_open_app))
             }
-        } catch (e: Exception) {
-            appContext.showToast(appContext.getString(R.string.unable_to_open_app))
         }
     }
 
     fun getAppList(includeHiddenApps: Boolean = false) {
         viewModelScope.launch {
-            appList.value = getAppsList(appContext, prefs, includeRegularApps = true, includeHiddenApps)
+            _appList.value = getAppsList(appContext, prefs, includeRegularApps = true, includeHiddenApps)
         }
     }
 
     fun getHiddenApps() {
         viewModelScope.launch {
-            hiddenApps.value = getAppsList(appContext, prefs, includeRegularApps = false, includeHiddenApps = true)
+            _hiddenApps.value = getAppsList(appContext, prefs, includeRegularApps = false, includeHiddenApps = true)
         }
     }
 
     fun isOlauncherDefault() {
-        isOlauncherDefault.value = isOlauncherDefault(appContext)
+        _isOlauncherDefault.value = appContext.isDefaultLauncher()
     }
 
     fun setWallpaperWorker() {
@@ -243,14 +180,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun updateHomeAlignment(gravity: Int) {
         prefs.homeAlignment = gravity
-        homeAppAlignment.value = prefs.homeAlignment
+        _homeAppAlignment.value = prefs.homeAlignment
     }
 
     fun getTodaysScreenTime() {
         if (prefs.screenTimeLastUpdated.hasBeenMinutes(1).not()) return
 
         val eventLogWrapper = EventLogWrapper(appContext)
-        // Start of today in millis
         val calendar = Calendar.getInstance().apply {
             set(Calendar.HOUR_OF_DAY, 0)
             set(Calendar.MINUTE, 0)
@@ -266,7 +202,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             )
         )
         val viewTimeSpent = appContext.formattedTimeSpent(timeSpent)
-        screenTimeValue.postValue(viewTimeSpent)
+        _screenTimeValue.postValue(viewTimeSpent)
         prefs.screenTimeLastUpdated = endTime
     }
 
@@ -282,6 +218,69 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
+            }
+        }
+    }
+
+    fun checkForMessages() {
+        if (prefs.firstOpenTime == 0L)
+            prefs.firstOpenTime = System.currentTimeMillis()
+
+        val calendar = Calendar.getInstance()
+        val dayOfYear = calendar.get(Calendar.DAY_OF_YEAR)
+        
+        // Special New Year logic
+        if ((dayOfYear == 1 || dayOfYear == 32) && dayOfYear != prefs.shownOnDayOfYear) {
+            prefs.shownOnDayOfYear = dayOfYear
+            showDialog.postValue(if (dayOfYear == 1) Constants.Dialog.NEW_YEAR else Constants.Dialog.NEW_YEAR_1)
+            return
+        }
+
+        when (prefs.userState) {
+            Constants.UserState.START -> {
+                if (prefs.firstOpenTime.hasBeenMinutes(10)) {
+                    prefs.userState = Constants.UserState.WALLPAPER
+                    checkForMessages()
+                }
+            }
+
+            Constants.UserState.WALLPAPER -> {
+                if (prefs.wallpaperMsgShown || prefs.dailyWallpaper) {
+                    prefs.userState = Constants.UserState.REVIEW
+                    checkForMessages()
+                } else if (appContext.isDefaultLauncher()) {
+                    showDialog.postValue(Constants.Dialog.WALLPAPER)
+                }
+            }
+
+            Constants.UserState.REVIEW -> {
+                if (prefs.rateClicked) {
+                    prefs.userState = Constants.UserState.SHARE
+                    checkForMessages()
+                } else if (appContext.isDefaultLauncher() && prefs.firstOpenTime.hasBeenHours(1)) {
+                    showDialog.postValue(Constants.Dialog.REVIEW)
+                }
+            }
+
+            Constants.UserState.RATE -> {
+                if (prefs.rateClicked) {
+                    prefs.userState = Constants.UserState.SHARE
+                    checkForMessages()
+                } else if (appContext.isDefaultLauncher()
+                    && prefs.firstOpenTime.isDaySince() >= 7
+                    && calendar.get(Calendar.HOUR_OF_DAY) >= 16
+                ) {
+                    showDialog.postValue(Constants.Dialog.RATE)
+                }
+            }
+
+            Constants.UserState.SHARE -> {
+                if (appContext.isDefaultLauncher() && prefs.firstOpenTime.hasBeenDays(14)
+                    && prefs.shareShownTime.isDaySince() >= 70
+                    && calendar.get(Calendar.HOUR_OF_DAY) >= 16
+                ) {
+                    showDialog.postValue(Constants.Dialog.SHARE)
+                }
             }
         }
     }

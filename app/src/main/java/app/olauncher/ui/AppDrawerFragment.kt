@@ -12,22 +12,12 @@ import androidx.fragment.app.activityViewModels
 import androidx.navigation.fragment.findNavController
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
-import androidx.recyclerview.widget.RecyclerView.Recycler
 import app.olauncher.MainViewModel
 import app.olauncher.R
 import app.olauncher.data.Constants
 import app.olauncher.data.Prefs
 import app.olauncher.databinding.FragmentAppDrawerBinding
-import app.olauncher.helper.hideKeyboard
-import app.olauncher.helper.isEinkDisplay
-import app.olauncher.helper.isSystemApp
-import app.olauncher.helper.openAppInfo
-import app.olauncher.helper.openSearch
-import app.olauncher.helper.openUrl
-import app.olauncher.helper.showKeyboard
-import app.olauncher.helper.showToast
-import app.olauncher.helper.uninstall
-
+import app.olauncher.helper.*
 
 class AppDrawerFragment : Fragment() {
 
@@ -42,11 +32,7 @@ class AppDrawerFragment : Fragment() {
     private var _binding: FragmentAppDrawerBinding? = null
     private val binding get() = _binding!!
 
-    override fun onCreateView(
-        inflater: LayoutInflater,
-        container: ViewGroup?,
-        savedInstanceState: Bundle?,
-    ): View {
+    override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
         _binding = FragmentAppDrawerBinding.inflate(inflater, container, false)
         return binding.root
     }
@@ -66,40 +52,35 @@ class AppDrawerFragment : Fragment() {
     }
 
     private fun initViews() {
-        if (flag == Constants.FLAG_HIDDEN_APPS)
-            binding.search.queryHint = getString(R.string.hidden_apps)
-        else if (flag in Constants.FLAG_SET_HOME_APP_1..Constants.FLAG_SET_CALENDAR_APP)
-            binding.search.queryHint = "Please select an app"
+        binding.search.queryHint = when (flag) {
+            Constants.FLAG_HIDDEN_APPS -> getString(R.string.hidden_apps)
+            in Constants.FLAG_SET_HOME_APP_1..Constants.FLAG_SET_CALENDAR_APP -> "Please select an app"
+            else -> binding.search.queryHint
+        }
+        
         try {
             val searchTextView = binding.search.findViewById<TextView>(androidx.appcompat.R.id.search_src_text)
-            if (searchTextView != null) searchTextView.gravity = prefs.appLabelAlignment
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
+            searchTextView?.gravity = prefs.appLabelAlignment
+        } catch (e: Exception) { e.printStackTrace() }
     }
 
     private fun initSearch() {
         binding.search.setOnQueryTextListener(object : SearchView.OnQueryTextListener {
             override fun onQueryTextSubmit(query: String?): Boolean {
-                if (query?.startsWith("!") == true)
-                    requireContext().openUrl(Constants.URL_DUCK_SEARCH + query.replace(" ", "%20"))
-                else if (adapter.itemCount == 0) // && requireContext().searchOnPlayStore(query?.trim()).not())
-                    requireContext().openSearch(query?.trim())
-                else
-                    adapter.launchFirstInList()
+                val q = query?.trim() ?: ""
+                when {
+                    q.startsWith("!") -> requireContext().openUrl(Constants.URL_DUCK_SEARCH + q.replace(" ", "%20"))
+                    adapter.itemCount == 0 -> requireContext().openSearch(q)
+                    else -> adapter.launchFirstInList()
+                }
                 return true
             }
 
             override fun onQueryTextChange(newText: String): Boolean {
-                try {
-                    adapter.filter.filter(newText)
-                    binding.appDrawerTip.visibility = View.GONE
-                    binding.appRename.visibility = if (canRename && newText.isNotBlank()) View.VISIBLE else View.GONE
-                    return true
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                }
-                return false
+                adapter.filter.filter(newText)
+                binding.appDrawerTip.visibility = View.GONE
+                binding.appRename.visibility = if (canRename && newText.isNotBlank()) View.VISIBLE else View.GONE
+                return true
             }
         })
     }
@@ -108,53 +89,46 @@ class AppDrawerFragment : Fragment() {
         adapter = AppDrawerAdapter(
             flag,
             prefs.appLabelAlignment,
-            appClickListener = {
-                if (it.appPackage.isEmpty())
-                    return@AppDrawerAdapter
-                viewModel.selectedApp(it, flag)
-                if (flag == Constants.FLAG_LAUNCH_APP || flag == Constants.FLAG_HIDDEN_APPS)
-                    findNavController().popBackStack(R.id.mainFragment, false)
-                else
-                    findNavController().popBackStack()
+            appClickListener = { app ->
+                if (app.appPackage.isEmpty()) return@AppDrawerAdapter
+                viewModel.selectedApp(app, flag)
+                val dest = if (flag == Constants.FLAG_LAUNCH_APP || flag == Constants.FLAG_HIDDEN_APPS) R.id.mainFragment else null
+                if (dest != null) findNavController().popBackStack(dest, false) else findNavController().popBackStack()
             },
-            appInfoListener = {
-                openAppInfo(
-                    requireContext(),
-                    it.user,
-                    it.appPackage
-                )
+            appInfoListener = { app ->
+                openAppInfo(requireContext(), app.user, app.appPackage)
                 findNavController().popBackStack(R.id.mainFragment, false)
             },
-            appDeleteListener = {
-                requireContext().apply {
-                    if (isSystemApp(it.appPackage))
-                        showToast(getString(R.string.system_app_cannot_delete))
-                    else
-                        uninstall(it.appPackage)
+            appDeleteListener = { app ->
+                if (requireContext().isSystemApp(app.appPackage)) {
+                    requireContext().showToast(R.string.system_app_cannot_delete)
+                } else {
+                    requireContext().uninstall(app.appPackage)
                 }
             },
-            appHideListener = { appModel, position ->
-                adapter.appFilteredList.removeAt(position)
-                adapter.notifyItemRemoved(position)
-                adapter.appsList.remove(appModel)
-
-                val newSet = mutableSetOf<String>()
-                newSet.addAll(prefs.hiddenApps)
+            appHideListener = { appModel, _ ->
+                val newSet = prefs.hiddenApps.toMutableSet()
+                val entry = "${appModel.appPackage}|${appModel.user}"
                 if (flag == Constants.FLAG_HIDDEN_APPS) {
-                    newSet.remove(appModel.appPackage) // for backward compatibility
-                    newSet.remove(appModel.appPackage + "|" + appModel.user.toString())
-                } else
-                    newSet.add(appModel.appPackage + "|" + appModel.user.toString())
+                    newSet.remove(appModel.appPackage) // Legacy support
+                    newSet.remove(entry)
+                } else {
+                    newSet.add(entry)
+                }
 
                 prefs.hiddenApps = newSet
-                if (newSet.isEmpty())
+                
+                if (flag == Constants.FLAG_HIDDEN_APPS && newSet.isEmpty()) {
                     findNavController().popBackStack()
+                }
+                
                 if (prefs.firstHide) {
                     binding.search.hideKeyboard()
                     prefs.firstHide = false
                     viewModel.showDialog.postValue(Constants.Dialog.HIDDEN)
                     findNavController().navigate(R.id.action_appListFragment_to_settingsFragment2)
                 }
+
                 viewModel.getAppList()
                 viewModel.getHiddenApps()
             },
@@ -165,99 +139,77 @@ class AppDrawerFragment : Fragment() {
         )
 
         linearLayoutManager = object : LinearLayoutManager(requireContext()) {
-            override fun scrollVerticallyBy(
-                dx: Int,
-                recycler: Recycler,
-                state: RecyclerView.State,
-            ): Int {
+            override fun scrollVerticallyBy(dx: Int, recycler: RecyclerView.Recycler, state: RecyclerView.State): Int {
                 val scrollRange = super.scrollVerticallyBy(dx, recycler, state)
-                val overScroll = dx - scrollRange
-                if (overScroll < -10 && binding.recyclerView.scrollState == RecyclerView.SCROLL_STATE_DRAGGING)
+                if (dx - scrollRange < -10 && binding.recyclerView.scrollState == RecyclerView.SCROLL_STATE_DRAGGING) {
                     checkMessageAndExit()
+                }
                 return scrollRange
             }
         }
 
-        binding.recyclerView.layoutManager = linearLayoutManager
-        binding.recyclerView.adapter = adapter
-        binding.recyclerView.addOnScrollListener(getRecyclerViewOnScrollListener())
-        binding.recyclerView.itemAnimator = null
-        if (requireContext().isEinkDisplay().not())
-            binding.recyclerView.layoutAnimation =
-                AnimationUtils.loadLayoutAnimation(requireContext(), R.anim.layout_anim_from_bottom)
+        binding.recyclerView.apply {
+            layoutManager = linearLayoutManager
+            this.adapter = this@AppDrawerFragment.adapter
+            addOnScrollListener(getRecyclerViewOnScrollListener())
+            itemAnimator = null
+            if (!requireContext().isEinkDisplay()) {
+                layoutAnimation = AnimationUtils.loadLayoutAnimation(requireContext(), R.anim.layout_anim_from_bottom)
+            }
+        }
     }
 
     private fun initObservers() {
-        viewModel.firstOpen.observe(viewLifecycleOwner) {
-            if (it && flag == Constants.FLAG_LAUNCH_APP) {
+        viewModel.firstOpen.observe(viewLifecycleOwner) { isFirst ->
+            if (isFirst && flag == Constants.FLAG_LAUNCH_APP) {
                 binding.appDrawerTip.visibility = View.VISIBLE
                 binding.appDrawerTip.isSelected = true
             }
         }
-        if (flag == Constants.FLAG_HIDDEN_APPS) {
-            viewModel.hiddenApps.observe(viewLifecycleOwner) {
-                it?.let {
-                    adapter.setAppList(it.toMutableList())
-                }
-            }
-        } else {
-            viewModel.appList.observe(viewLifecycleOwner) {
-                it?.let { appModels ->
-                    adapter.setAppList(appModels.toMutableList())
-                    adapter.filter.filter(binding.search.query)
-                }
+        
+        val liveData = if (flag == Constants.FLAG_HIDDEN_APPS) viewModel.hiddenApps else viewModel.appList
+        liveData.observe(viewLifecycleOwner) { list ->
+            list?.let {
+                adapter.setAppList(it.toMutableList())
+                if (flag != Constants.FLAG_HIDDEN_APPS) adapter.filter.filter(binding.search.query)
             }
         }
     }
 
     private fun initClickListeners() {
         binding.appDrawerTip.setOnClickListener {
-            binding.appDrawerTip.isSelected = false
-            binding.appDrawerTip.isSelected = true
+            it.isSelected = false
+            it.isSelected = true
         }
         binding.appRename.setOnClickListener {
             val name = binding.search.query.toString().trim()
             if (name.isEmpty()) {
-                requireContext().showToast(getString(R.string.type_a_new_app_name_first))
+                requireContext().showToast(R.string.type_a_new_app_name_first)
                 binding.search.showKeyboard()
                 return@setOnClickListener
             }
 
-            when (flag) {
-                Constants.FLAG_SET_HOME_APP_1 -> prefs.appName1 = name
-                Constants.FLAG_SET_HOME_APP_2 -> prefs.appName2 = name
-                Constants.FLAG_SET_HOME_APP_3 -> prefs.appName3 = name
-                Constants.FLAG_SET_HOME_APP_4 -> prefs.appName4 = name
-                Constants.FLAG_SET_HOME_APP_5 -> prefs.appName5 = name
-                Constants.FLAG_SET_HOME_APP_6 -> prefs.appName6 = name
-                Constants.FLAG_SET_HOME_APP_7 -> prefs.appName7 = name
-                Constants.FLAG_SET_HOME_APP_8 -> prefs.appName8 = name
+            if (flag in Constants.FLAG_SET_HOME_APP_1..Constants.FLAG_SET_HOME_APP_8) {
+                prefs.setHomeAppName(flag, name)
             }
             findNavController().popBackStack()
         }
     }
 
-    private fun getRecyclerViewOnScrollListener(): RecyclerView.OnScrollListener {
-        return object : RecyclerView.OnScrollListener() {
+    private fun getRecyclerViewOnScrollListener() = object : RecyclerView.OnScrollListener() {
+        var onTop = false
 
-            var onTop = false
-
-            override fun onScrollStateChanged(recyclerView: RecyclerView, newState: Int) {
-                super.onScrollStateChanged(recyclerView, newState)
-                when (newState) {
-
-                    RecyclerView.SCROLL_STATE_DRAGGING -> {
-                        onTop = !recyclerView.canScrollVertically(-1)
-                        if (onTop)
-                            binding.search.hideKeyboard()
-                    }
-
-                    RecyclerView.SCROLL_STATE_IDLE -> {
-                        if (!recyclerView.canScrollVertically(1))
-                            binding.search.hideKeyboard()
-                        else if (!recyclerView.canScrollVertically(-1))
-                            if (!onTop && isRemoving.not())
-                                binding.search.showKeyboard(prefs.autoShowKeyboard)
+        override fun onScrollStateChanged(recyclerView: RecyclerView, newState: Int) {
+            when (newState) {
+                RecyclerView.SCROLL_STATE_DRAGGING -> {
+                    onTop = !recyclerView.canScrollVertically(-1)
+                    if (onTop) binding.search.hideKeyboard()
+                }
+                RecyclerView.SCROLL_STATE_IDLE -> {
+                    if (!recyclerView.canScrollVertically(1)) {
+                        binding.search.hideKeyboard()
+                    } else if (!recyclerView.canScrollVertically(-1)) {
+                        if (!onTop && !isRemoving) binding.search.showKeyboard(prefs.autoShowKeyboard)
                     }
                 }
             }
@@ -266,8 +218,7 @@ class AppDrawerFragment : Fragment() {
 
     private fun checkMessageAndExit() {
         findNavController().popBackStack()
-        if (flag == Constants.FLAG_LAUNCH_APP)
-            viewModel.checkForMessages.call()
+        if (flag == Constants.FLAG_LAUNCH_APP) viewModel.checkForMessages()
     }
 
     override fun onStart() {
