@@ -119,10 +119,25 @@ class HomeFragment : Fragment(), View.OnClickListener, View.OnLongClickListener 
 
     override fun onLongClick(view: View): Boolean {
         when (view.id) {
-            in listOf(R.id.homeApp1, R.id.homeApp2, R.id.homeApp3, R.id.homeApp4, R.id.homeApp5, R.id.homeApp6, R.id.homeApp7, R.id.homeApp8) -> {
-                val index = homeAppViews.indexOf(view) + 1
-                val isSet = prefs.getAppName(index).isNotEmpty() || prefs.getHomeCategory(index) != null
-                showAppList(index, isSet, true)
+            R.id.homeApp1, R.id.homeApp2, R.id.homeApp3, R.id.homeApp4,
+            R.id.homeApp5, R.id.homeApp6, R.id.homeApp7, R.id.homeApp8 -> {
+
+                // Map die View IDs direkt auf deine FLAG Konstanten
+                val flag = when(view.id) {
+                    R.id.homeApp1 -> Constants.FLAG_SET_HOME_APP_1
+                    R.id.homeApp2 -> Constants.FLAG_SET_HOME_APP_2
+                    R.id.homeApp3 -> Constants.FLAG_SET_HOME_APP_3
+                    R.id.homeApp4 -> Constants.FLAG_SET_HOME_APP_4
+                    R.id.homeApp5 -> Constants.FLAG_SET_HOME_APP_5
+                    R.id.homeApp6 -> Constants.FLAG_SET_HOME_APP_6
+                    R.id.homeApp7 -> Constants.FLAG_SET_HOME_APP_7
+                    R.id.homeApp8 -> Constants.FLAG_SET_HOME_APP_8
+                    else -> Constants.FLAG_SET_HOME_APP_1
+                }
+
+                val position = homeAppViews.indexOf(view) + 1
+                val isSet = prefs.getAppName(position).isNotEmpty() || prefs.getHomeCategory(position) != null
+                showAppList(flag, isSet, true) // Nutze das explizite Flag
             }
             R.id.clock -> {
                 showAppList(Constants.FLAG_SET_CLOCK_APP)

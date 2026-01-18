@@ -52,10 +52,9 @@ class AppDrawerFragment : Fragment() {
         arguments?.let {
             flag = it.getInt(Constants.Key.FLAG, Constants.FLAG_LAUNCH_APP)
             canRename = it.getBoolean(Constants.Key.RENAME, false)
-        }
-        
-        arguments?.getString("start_category")?.let {
-            currentCategory = it
+            it.getString("start_category")?.let { cat ->
+                currentCategory = cat
+            }
         }
 
         initViews()
@@ -65,17 +64,41 @@ class AppDrawerFragment : Fragment() {
         initObservers()
         initClickListeners()
         
+        val homeSlots = listOf(
+            Constants.FLAG_SET_HOME_APP_1, Constants.FLAG_SET_HOME_APP_2,
+            Constants.FLAG_SET_HOME_APP_3, Constants.FLAG_SET_HOME_APP_4,
+            Constants.FLAG_SET_HOME_APP_5, Constants.FLAG_SET_HOME_APP_6,
+            Constants.FLAG_SET_HOME_APP_7, Constants.FLAG_SET_HOME_APP_8
+        )
+        val isHomeSelection = homeSlots.contains(flag)
+
         if (flag == Constants.FLAG_LAUNCH_APP) {
             showKeyboardWithFocus()
-        } else if (flag in Constants.FLAG_SET_HOME_APP_1..Constants.FLAG_SET_HOME_APP_8) {
+        } else if (isHomeSelection) {
             binding.search.clearFocus()
         }
     }
 
     private fun initViews() {
-        binding.search.queryHint = when (flag) {
-            Constants.FLAG_HIDDEN_APPS -> getString(R.string.hidden_apps)
-            in Constants.FLAG_SET_HOME_APP_1..Constants.FLAG_SET_CALENDAR_APP -> "Please select an app"
+        val homeSlots = listOf(
+            Constants.FLAG_SET_HOME_APP_1, Constants.FLAG_SET_HOME_APP_2,
+            Constants.FLAG_SET_HOME_APP_3, Constants.FLAG_SET_HOME_APP_4,
+            Constants.FLAG_SET_HOME_APP_5, Constants.FLAG_SET_HOME_APP_6,
+            Constants.FLAG_SET_HOME_APP_7, Constants.FLAG_SET_HOME_APP_8
+        )
+        val isHomeSelection = homeSlots.contains(flag)
+        
+        // Sichtbarkeit der Kategorien erzwingen
+        binding.categoryRecyclerView.visibility = if (flag == Constants.FLAG_LAUNCH_APP || isHomeSelection) {
+            View.VISIBLE
+        } else {
+            View.GONE
+        }
+
+        binding.search.queryHint = when {
+            flag == Constants.FLAG_HIDDEN_APPS -> getString(R.string.hidden_apps)
+            isHomeSelection -> "App oder Kategorie wählen" 
+            flag in Constants.FLAG_SET_SWIPE_LEFT_APP..Constants.FLAG_SET_CALENDAR_APP -> "Bitte App wählen"
             else -> binding.search.queryHint
         }
         
@@ -108,9 +131,17 @@ class AppDrawerFragment : Fragment() {
     }
 
     private fun initCategories() {
+        val homeSlots = listOf(
+            Constants.FLAG_SET_HOME_APP_1, Constants.FLAG_SET_HOME_APP_2,
+            Constants.FLAG_SET_HOME_APP_3, Constants.FLAG_SET_HOME_APP_4,
+            Constants.FLAG_SET_HOME_APP_5, Constants.FLAG_SET_HOME_APP_6,
+            Constants.FLAG_SET_HOME_APP_7, Constants.FLAG_SET_HOME_APP_8
+        )
+        val isHomeSelection = homeSlots.contains(flag)
+        
         categoryAdapter = CategoryAdapter(Constants.CATEGORIES, currentCategory) { category ->
-            if (flag in Constants.FLAG_SET_HOME_APP_1..Constants.FLAG_SET_HOME_APP_8) {
-                // In den Prefs speichern (damit der Homescreen weiß, dass es eine Kategorie ist)
+            if (isHomeSelection) {
+                // SPEICHERN: Kategorie dem Slot zuweisen
                 prefs.setHomeCategory(flag, category)
                 viewModel.selectedCategory(category, flag)
                 findNavController().popBackStack()
@@ -123,7 +154,7 @@ class AppDrawerFragment : Fragment() {
         binding.categoryRecyclerView.adapter = categoryAdapter
         binding.categoryRecyclerView.layoutManager = LinearLayoutManager(requireContext(), RecyclerView.HORIZONTAL, false)
         
-        val isHomeSelection = flag in Constants.FLAG_SET_HOME_APP_1..Constants.FLAG_SET_HOME_APP_8
+        // Erneute Prüfung für die RecyclerView Sichtbarkeit
         binding.categoryRecyclerView.visibility = if (flag == Constants.FLAG_LAUNCH_APP || isHomeSelection) {
             View.VISIBLE
         } else {
@@ -183,8 +214,16 @@ class AppDrawerFragment : Fragment() {
             appClickListener = { app ->
                 if (app.appPackage.isEmpty()) return@AppDrawerAdapter
                 
-                // Wenn eine App gewählt wird, muss die Kategorie für diesen Slot gelöscht werden
-                if (flag in Constants.FLAG_SET_HOME_APP_1..Constants.FLAG_SET_HOME_APP_8) {
+                val homeSlots = listOf(
+                    Constants.FLAG_SET_HOME_APP_1, Constants.FLAG_SET_HOME_APP_2,
+                    Constants.FLAG_SET_HOME_APP_3, Constants.FLAG_SET_HOME_APP_4,
+                    Constants.FLAG_SET_HOME_APP_5, Constants.FLAG_SET_HOME_APP_6,
+                    Constants.FLAG_SET_HOME_APP_7, Constants.FLAG_SET_HOME_APP_8
+                )
+                val isHomeSelection = homeSlots.contains(flag)
+                
+                // Falls eine App gewählt wird, lösche die Kategorie-Zuweisung für diesen Slot
+                if (isHomeSelection) {
                     prefs.setHomeCategory(flag, null)
                 }
 
@@ -311,7 +350,13 @@ class AppDrawerFragment : Fragment() {
                 return@setOnClickListener
             }
 
-            if (flag in Constants.FLAG_SET_HOME_APP_1..Constants.FLAG_SET_HOME_APP_8) {
+            val homeSlots = listOf(
+                Constants.FLAG_SET_HOME_APP_1, Constants.FLAG_SET_HOME_APP_2,
+                Constants.FLAG_SET_HOME_APP_3, Constants.FLAG_SET_HOME_APP_4,
+                Constants.FLAG_SET_HOME_APP_5, Constants.FLAG_SET_HOME_APP_6,
+                Constants.FLAG_SET_HOME_APP_7, Constants.FLAG_SET_HOME_APP_8
+            )
+            if (flag in homeSlots) {
                 prefs.setHomeAppName(flag, name)
             }
             findNavController().popBackStack()

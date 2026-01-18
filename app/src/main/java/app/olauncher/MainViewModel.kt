@@ -58,24 +58,31 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val showDialog = SingleLiveEvent<String>()
     val resetLauncherLiveData = SingleLiveEvent<Unit?>()
 
+    private val homeSlots = listOf(
+        Constants.FLAG_SET_HOME_APP_1, Constants.FLAG_SET_HOME_APP_2,
+        Constants.FLAG_SET_HOME_APP_3, Constants.FLAG_SET_HOME_APP_4,
+        Constants.FLAG_SET_HOME_APP_5, Constants.FLAG_SET_HOME_APP_6,
+        Constants.FLAG_SET_HOME_APP_7, Constants.FLAG_SET_HOME_APP_8
+    )
+
     fun selectedApp(appModel: AppModel, flag: Int) {
-        when (flag) {
-            Constants.FLAG_LAUNCH_APP, Constants.FLAG_HIDDEN_APPS -> {
+        when {
+            flag == Constants.FLAG_LAUNCH_APP || flag == Constants.FLAG_HIDDEN_APPS -> {
                 launchApp(appModel.appPackage, appModel.activityClassName, appModel.user)
             }
 
-            in Constants.FLAG_SET_HOME_APP_1..Constants.FLAG_SET_HOME_APP_8 -> {
+            homeSlots.contains(flag) -> {
                 prefs.setHomeApp(flag, appModel)
                 refreshHome(false)
             }
 
-            in Constants.FLAG_SET_SIDE_APP_1..Constants.FLAG_SET_SIDE_APP_7 -> {
+            flag in Constants.FLAG_SET_SIDE_APP_1..Constants.FLAG_SET_SIDE_APP_7 -> {
                 val index = flag - Constants.FLAG_SET_SIDE_APP_1 + 1
                 prefs.setSideApp(index, appModel)
                 refreshHome(false)
             }
 
-            Constants.FLAG_SET_SWIPE_LEFT_APP -> {
+            flag == Constants.FLAG_SET_SWIPE_LEFT_APP -> {
                 prefs.appNameSwipeLeft = appModel.appLabel
                 prefs.appPackageSwipeLeft = appModel.appPackage
                 prefs.appUserSwipeLeft = appModel.user.toString()
@@ -83,7 +90,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 updateSwipeApps.call()
             }
 
-            Constants.FLAG_SET_SWIPE_RIGHT_APP -> {
+            flag == Constants.FLAG_SET_SWIPE_RIGHT_APP -> {
                 prefs.appNameSwipeRight = appModel.appLabel
                 prefs.appPackageSwipeRight = appModel.appPackage
                 prefs.appUserSwipeRight = appModel.user.toString()
@@ -91,13 +98,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 updateSwipeApps.call()
             }
 
-            Constants.FLAG_SET_CLOCK_APP -> {
+            flag == Constants.FLAG_SET_CLOCK_APP -> {
                 prefs.clockAppPackage = appModel.appPackage
                 prefs.clockAppUser = appModel.user.toString()
                 prefs.clockAppClassName = appModel.activityClassName ?: ""
             }
 
-            Constants.FLAG_SET_CALENDAR_APP -> {
+            flag == Constants.FLAG_SET_CALENDAR_APP -> {
                 prefs.calendarAppPackage = appModel.appPackage
                 prefs.calendarAppUser = appModel.user.toString()
                 prefs.calendarAppClassName = appModel.activityClassName ?: ""
@@ -106,7 +113,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun selectedCategory(category: String, flag: Int) {
-        if (flag in Constants.FLAG_SET_HOME_APP_1..Constants.FLAG_SET_HOME_APP_8) {
+        if (homeSlots.contains(flag)) {
             prefs.setHomeCategory(flag, category)
             refreshHome(false)
         }
