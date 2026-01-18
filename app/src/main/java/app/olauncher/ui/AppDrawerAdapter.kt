@@ -29,6 +29,7 @@ class AppDrawerAdapter(
     private val appDeleteListener: (AppModel) -> Unit,
     private val appHideListener: (AppModel, Int) -> Unit,
     private val appRenameListener: (AppModel, String) -> Unit,
+    private val appCategoryListener: (AppModel) -> Unit
 ) : ListAdapter<AppModel, AppDrawerAdapter.ViewHolder>(DIFF_CALLBACK), Filterable {
 
     companion object {
@@ -66,7 +67,8 @@ class AppDrawerAdapter(
             appDeleteListener,
             appInfoListener,
             appHideListener,
-            appRenameListener
+            appRenameListener,
+            appCategoryListener
         )
     }
 
@@ -121,10 +123,14 @@ class AppDrawerAdapter(
     class ViewHolder(private val binding: AdapterAppDrawerBinding) : RecyclerView.ViewHolder(binding.root) {
 
         fun bindEmpty() = with(binding) {
-            root.layoutParams.height = 200 // Padding height
+            val params = root.layoutParams
+            params.height = root.context.resources.getDimensionPixelSize(R.dimen.app_drawer_bottom_padding)
+            root.layoutParams = params
+            
             appTitle.visibility = View.GONE
             appHideLayout.visibility = View.GONE
             renameLayout.visibility = View.GONE
+            otherProfileIndicator.visibility = View.GONE
         }
 
         fun bind(
@@ -137,8 +143,14 @@ class AppDrawerAdapter(
             appInfoListener: (AppModel) -> Unit,
             appHideListener: (AppModel, Int) -> Unit,
             appRenameListener: (AppModel, String) -> Unit,
+            appCategoryListener: (AppModel) -> Unit
         ) = with(binding) {
-            root.layoutParams.height = ViewGroup.LayoutParams.WRAP_CONTENT
+            val params = root.layoutParams
+            if (params.height != ViewGroup.LayoutParams.WRAP_CONTENT) {
+                params.height = ViewGroup.LayoutParams.WRAP_CONTENT
+                root.layoutParams = params
+            }
+
             appHideLayout.isVisible = false
             renameLayout.isVisible = false
             appTitle.isVisible = true
@@ -198,6 +210,10 @@ class AppDrawerAdapter(
             appInfo.setOnClickListener { appInfoListener(appModel) }
             appDelete.setOnClickListener { appDeleteListener(appModel) }
             appHide.setOnClickListener { appHideListener(appModel, bindingAdapterPosition) }
+            
+            appCategories.setOnClickListener {
+                appCategoryListener(appModel)
+            }
         }
 
         private fun saveRename(appModel: AppModel, listener: (AppModel, String) -> Unit) {

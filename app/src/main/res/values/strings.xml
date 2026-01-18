@@ -1,4 +1,4 @@
-<resources>
+<resources xmlns:tools="http://schemas.android.com/tools">
     <string name="app_name" translatable="false">Olauncher</string>
     <string name="github" translatable="false">Github</string>
     <string name="lock_layout_description" translatable="false">lock layout description to be used a unique id to lock screen</string>
@@ -161,4 +161,7 @@
     <string name="cheers">Cheers!</string>
     <string name="notification_bar">Notification bar</string>
     <string name="app_label_with_star" translatable="false">%1$s ✦</string>
+    <string name="edit_categories" tools:ignore="MissingTranslation">Edit Categories</string>
+    <string name="save" tools:ignore="MissingTranslation">Save</string>
+    <string name="categories" tools:ignore="MissingTranslation">Categories</string>
 </resources>

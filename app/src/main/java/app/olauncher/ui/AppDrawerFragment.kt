@@ -8,6 +8,7 @@ import android.view.ViewGroup
 import android.view.animation.AnimationUtils
 import android.view.inputmethod.InputMethodManager
 import android.widget.TextView
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.widget.SearchView
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.activityViewModels
@@ -16,8 +17,11 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import app.olauncher.MainViewModel
 import app.olauncher.R
+import androidx.appcompat.R as AppCompatR
+import app.olauncher.data.AppModel
 import app.olauncher.data.Constants
 import app.olauncher.data.Prefs
+import app.olauncher.databinding.DialogEditCategoriesBinding
 import app.olauncher.databinding.FragmentAppDrawerBinding
 import app.olauncher.helper.*
 
@@ -25,10 +29,13 @@ class AppDrawerFragment : Fragment() {
 
     private lateinit var prefs: Prefs
     private lateinit var adapter: AppDrawerAdapter
+    private lateinit var categoryAdapter: CategoryAdapter
     private lateinit var linearLayoutManager: LinearLayoutManager
 
     private var flag = Constants.FLAG_LAUNCH_APP
     private var canRename = false
+    private var currentCategory = "Alle"
+    private var fullAppList: List<AppModel> = emptyList()
 
     private val viewModel: MainViewModel by activityViewModels()
     private var _binding: FragmentAppDrawerBinding? = null
@@ -48,6 +55,7 @@ class AppDrawerFragment : Fragment() {
         }
         initViews()
         initSearch()
+        initCategories()
         initAdapter()
         initObservers()
         initClickListeners()
@@ -65,7 +73,8 @@ class AppDrawerFragment : Fragment() {
         }
         
         try {
-            val searchTextView = binding.search.findViewById<TextView>(androidx.appcompat.R.id.search_src_text)
+            // Using AppCompat's internal ID via alias to avoid Unresolved Reference or Deprecation warnings
+            val searchTextView = binding.search.findViewById<TextView>(AppCompatR.id.search_src_text)
             searchTextView?.gravity = prefs.appLabelAlignment
         } catch (e: Exception) { e.printStackTrace() }
     }
@@ -89,6 +98,38 @@ class AppDrawerFragment : Fragment() {
                 return true
             }
         })
+    }
+
+    private fun initCategories() {
+        categoryAdapter = CategoryAdapter(Constants.CATEGORIES) { category ->
+            currentCategory = category
+            filterAppsByCategory()
+        }
+        binding.categoryRecyclerView.apply {
+            adapter = categoryAdapter
+            layoutManager = LinearLayoutManager(requireContext(), RecyclerView.HORIZONTAL, false)
+            visibility = if (flag == Constants.FLAG_LAUNCH_APP) View.VISIBLE else View.GONE
+        }
+    }
+
+    private fun filterAppsByCategory() {
+        val filtered = when (currentCategory) {
+            "Alle" -> fullAppList
+            "Unkategorisiert" -> fullAppList.filter { app ->
+                prefs.getAppCategories(app.appPackage).isEmpty()
+            }
+            else -> fullAppList.filter { app ->
+                prefs.getAppCategories(app.appPackage).contains(currentCategory)
+            }
+        }
+        adapter.setAppList(filtered.toMutableList())
+        adapter.filter.filter(binding.search.query)
+
+        if (currentCategory == "Alle" || currentCategory == "Unkategorisiert") {
+            showKeyboardWithFocus()
+        } else {
+            binding.search.hideKeyboard()
+        }
     }
 
     private fun initAdapter() {
@@ -141,6 +182,9 @@ class AppDrawerFragment : Fragment() {
             appRenameListener = { appModel, renameLabel ->
                 prefs.setAppRenameLabel(appModel.appPackage, renameLabel)
                 viewModel.getAppList()
+            },
+            appCategoryListener = { appModel ->
+                showEditCategoriesDialog(appModel)
             }
         )
 
@@ -165,6 +209,28 @@ class AppDrawerFragment : Fragment() {
         }
     }
 
+    private fun showEditCategoriesDialog(appModel: AppModel) {
+        val dialogBinding = DialogEditCategoriesBinding.inflate(layoutInflater)
+        val editCategories = Constants.CATEGORIES.filter { it != "Alle" && it != "Unkategorisiert" }
+        val currentCats = prefs.getAppCategories(appModel.appPackage)
+        val editAdapter = EditCategoryAdapter(editCategories, currentCats)
+        
+        dialogBinding.categoriesRecyclerView.layoutManager = LinearLayoutManager(requireContext())
+        dialogBinding.categoriesRecyclerView.adapter = editAdapter
+        
+        val dialog = AlertDialog.Builder(requireContext(), R.style.AppTheme)
+            .setView(dialogBinding.root)
+            .create()
+            
+        dialogBinding.saveCategories.setOnClickListener {
+            prefs.setAppCategories(appModel.appPackage, editAdapter.getSelectedCategories())
+            filterAppsByCategory()
+            dialog.dismiss()
+        }
+        
+        dialog.show()
+    }
+
     private fun initObservers() {
         viewModel.firstOpen.observe(viewLifecycleOwner) { isFirst ->
             if (isFirst && flag == Constants.FLAG_LAUNCH_APP) {
@@ -176,8 +242,8 @@ class AppDrawerFragment : Fragment() {
         val liveData = if (flag == Constants.FLAG_HIDDEN_APPS) viewModel.hiddenApps else viewModel.appList
         liveData.observe(viewLifecycleOwner) { list ->
             list?.let {
-                adapter.setAppList(it.toMutableList())
-                if (flag != Constants.FLAG_HIDDEN_APPS) adapter.filter.filter(binding.search.query)
+                fullAppList = it
+                filterAppsByCategory()
             }
         }
     }
@@ -228,9 +294,10 @@ class AppDrawerFragment : Fragment() {
     }
 
     private fun showKeyboardWithFocus() {
-        if (prefs.autoShowKeyboard) {
+        if (prefs.autoShowKeyboard && (currentCategory == "Alle" || currentCategory == "Unkategorisiert")) {
             binding.search.post {
-                val searchEditText = binding.search.findViewById<View>(androidx.appcompat.R.id.search_src_text)
+                // Using AppCompat's internal ID via alias to avoid Unresolved Reference or Deprecation warnings
+                val searchEditText = binding.search.findViewById<View>(AppCompatR.id.search_src_text)
                 searchEditText?.requestFocus()
                 binding.search.postDelayed({
                     if (isAdded && !isRemoving) {

@@ -26,7 +26,7 @@
         \n\nWeitere Einzelheiten finden Sie auf der „Über“ Seite unten.</string>
     <string name="swipe_down_for">Wischen Sie nach unten für</string>
     <string name="search">Suchen</string>
-    <string name="notifications">Benachrichtigungen</string>
+    <string name="notifications">Notifications</string>
     <string name="accessibility_disclosure">Bitte schalten Sie den Barrierefreiheitsdienst von Olauncher in den Einstellungen Ihres Geräts ein oder aus, um diese Funktion zu aktivieren oder zu deaktivieren.
         \n\nBitte beachten Sie, dass dieser Dienst nur dazu dient, den Bildschirm Ihres Geräts mit der Doppeltipp-Geste auszuschalten. Unser Barrierefreiheitsdienst erfasst oder gibt keine Daten weiter.</string>
     <string name="accept">Akzeptieren</string>
@@ -143,4 +143,7 @@
     <string name="new_year_wish_1">Egal, wie der Januar gelaufen ist. Du hast noch den Rest des Jahres Zeit, um besser zu sein als je zuvor.</string>
     <string name="cheers">Prost!</string>
     <string name="notification_bar">Benachrichtigungsleiste</string>
+    <string name="edit_categories">Kategorien bearbeiten</string>
+    <string name="save">Speichern</string>
+    <string name="categories">Kategorien</string>
 </resources>

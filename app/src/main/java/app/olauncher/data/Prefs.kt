@@ -106,6 +106,12 @@ class Prefs(context: Context) {
     fun setAppRenameLabel(appPackage: String, renameLabel: String) =
         prefs.edit { putString("RENAME_$appPackage", renameLabel) }
 
+    fun getAppCategories(appPackage: String): Set<String> =
+        prefs.getStringSet("CATS_$appPackage", null) ?: emptySet()
+
+    fun setAppCategories(appPackage: String, categories: Set<String>) =
+        prefs.edit { putStringSet("CATS_$appPackage", categories) }
+
     @Suppress("SameParameterValue")
     private fun string(key: String, defaultValue: String) = delegate(key, defaultValue, SharedPreferences::getString, SharedPreferences.Editor::putString)
     @Suppress("SameParameterValue")
