@@ -121,7 +121,8 @@ class HomeFragment : Fragment(), View.OnClickListener, View.OnLongClickListener 
         when (view.id) {
             in listOf(R.id.homeApp1, R.id.homeApp2, R.id.homeApp3, R.id.homeApp4, R.id.homeApp5, R.id.homeApp6, R.id.homeApp7, R.id.homeApp8) -> {
                 val index = homeAppViews.indexOf(view) + 1
-                showAppList(index, prefs.getAppName(index).isNotEmpty(), true)
+                val isSet = prefs.getAppName(index).isNotEmpty() || prefs.getHomeCategory(index) != null
+                showAppList(index, isSet, true)
             }
             R.id.clock -> {
                 showAppList(Constants.FLAG_SET_CLOCK_APP)
@@ -258,11 +259,13 @@ class HomeFragment : Fragment(), View.OnClickListener, View.OnLongClickListener 
                 // Dieser Slot soll angezeigt werden
                 textView.visibility = View.VISIBLE
                 
-                val name = prefs.getAppName(position)
-                if (name.isBlank()) {
-                    textView.text = getString(R.string.app) // Platzhalter aus Ressourcen
-                } else {
-                    textView.text = name
+                val category = prefs.getHomeCategory(position)
+                val appName = prefs.getAppName(position)
+                
+                when {
+                    category != null -> textView.text = category
+                    appName.isNotBlank() -> textView.text = appName
+                    else -> textView.text = getString(R.string.app)
                 }
                 
                 // Klick-Listener auffrischen
@@ -278,6 +281,12 @@ class HomeFragment : Fragment(), View.OnClickListener, View.OnLongClickListener 
     }
 
     private fun homeAppClicked(location: Int) {
+        val category = prefs.getHomeCategory(location)
+        if (category != null) {
+            showAppList(Constants.FLAG_LAUNCH_APP, startCategory = category)
+            return
+        }
+
         val appName = prefs.getAppName(location)
         if (appName.isEmpty()) {
             showAppList(location, rename = false, includeHiddenApps = true)
@@ -352,9 +361,13 @@ class HomeFragment : Fragment(), View.OnClickListener, View.OnLongClickListener 
         )
     }
 
-    private fun showAppList(flag: Int, rename: Boolean = false, includeHiddenApps: Boolean = false) {
+    private fun showAppList(flag: Int, rename: Boolean = false, includeHiddenApps: Boolean = false, startCategory: String? = null) {
         viewModel.getAppList(includeHiddenApps)
-        val args = bundleOf(Constants.Key.FLAG to flag, Constants.Key.RENAME to rename)
+        val args = bundleOf(
+            Constants.Key.FLAG to flag,
+            Constants.Key.RENAME to rename,
+            "start_category" to startCategory
+        )
         try {
             findNavController().navigate(R.id.action_mainFragment_to_appListFragment, args)
         } catch (_: Exception) {

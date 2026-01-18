@@ -53,6 +53,11 @@ class AppDrawerFragment : Fragment() {
             flag = it.getInt(Constants.Key.FLAG, Constants.FLAG_LAUNCH_APP)
             canRename = it.getBoolean(Constants.Key.RENAME, false)
         }
+        
+        arguments?.getString("start_category")?.let {
+            currentCategory = it
+        }
+
         initViews()
         initSearch()
         initCategories()
@@ -62,6 +67,8 @@ class AppDrawerFragment : Fragment() {
         
         if (flag == Constants.FLAG_LAUNCH_APP) {
             showKeyboardWithFocus()
+        } else if (flag in Constants.FLAG_SET_HOME_APP_1..Constants.FLAG_SET_HOME_APP_8) {
+            binding.search.clearFocus()
         }
     }
 
@@ -73,7 +80,7 @@ class AppDrawerFragment : Fragment() {
         }
         
         try {
-            // Using AppCompat's internal ID via alias to avoid Unresolved Reference or Deprecation warnings
+            // Accessing the internal TextView of SearchView using AppCompatR to avoid unresolved reference issues.
             val searchTextView = binding.search.findViewById<TextView>(AppCompatR.id.search_src_text)
             searchTextView?.gravity = prefs.appLabelAlignment
         } catch (e: Exception) { e.printStackTrace() }
@@ -101,14 +108,26 @@ class AppDrawerFragment : Fragment() {
     }
 
     private fun initCategories() {
-        categoryAdapter = CategoryAdapter(Constants.CATEGORIES) { category ->
-            currentCategory = category
-            filterAppsByCategory()
+        categoryAdapter = CategoryAdapter(Constants.CATEGORIES, currentCategory) { category ->
+            if (flag in Constants.FLAG_SET_HOME_APP_1..Constants.FLAG_SET_HOME_APP_8) {
+                // In den Prefs speichern (damit der Homescreen weiß, dass es eine Kategorie ist)
+                prefs.setHomeCategory(flag, category)
+                viewModel.selectedCategory(category, flag)
+                findNavController().popBackStack()
+            } else {
+                currentCategory = category
+                filterAppsByCategory()
+            }
         }
-        binding.categoryRecyclerView.apply {
-            adapter = categoryAdapter
-            layoutManager = LinearLayoutManager(requireContext(), RecyclerView.HORIZONTAL, false)
-            visibility = if (flag == Constants.FLAG_LAUNCH_APP) View.VISIBLE else View.GONE
+        
+        binding.categoryRecyclerView.adapter = categoryAdapter
+        binding.categoryRecyclerView.layoutManager = LinearLayoutManager(requireContext(), RecyclerView.HORIZONTAL, false)
+        
+        val isHomeSelection = flag in Constants.FLAG_SET_HOME_APP_1..Constants.FLAG_SET_HOME_APP_8
+        binding.categoryRecyclerView.visibility = if (flag == Constants.FLAG_LAUNCH_APP || isHomeSelection) {
+            View.VISIBLE
+        } else {
+            View.GONE
         }
     }
 
@@ -122,8 +141,33 @@ class AppDrawerFragment : Fragment() {
                 prefs.getAppCategories(app.appPackage).contains(currentCategory)
             }
         }
+        
+        // 1. Animation sofort entfernen
+        binding.recyclerView.layoutAnimation = null 
+        
+        // 2. Daten im Adapter aktualisieren
         adapter.setAppList(filtered.toMutableList())
-        adapter.filter.filter(binding.search.query)
+        
+        // 3. Den Filter-Vorgang starten
+        adapter.filter.filter(binding.search.query) {
+            // Dieser Callback kommt, wenn der Filter fertig ist.
+            // Wir nutzen .post {}, um sicherzugehen, dass die RecyclerView 
+            // die neuen Items bereits intern verarbeitet hat.
+            binding.recyclerView.post {
+                linearLayoutManager.scrollToPositionWithOffset(0, 0)
+                
+                // 4. Animation erst nach dem Scrollen (optional) wieder aktivieren
+                if (isAdded && !requireContext().isEinkDisplay()) {
+                    binding.recyclerView.postDelayed({
+                        if (isAdded) {
+                            binding.recyclerView.layoutAnimation = AnimationUtils.loadLayoutAnimation(
+                                requireContext(), R.anim.layout_anim_from_bottom
+                            )
+                        }
+                    }, 100) // Kurze Verzögerung, damit das Scrollen Vorrang hat
+                }
+            }
+        }
 
         if (currentCategory == "Alle" || currentCategory == "Unkategorisiert") {
             showKeyboardWithFocus()
@@ -138,6 +182,12 @@ class AppDrawerFragment : Fragment() {
             prefs.appLabelAlignment,
             appClickListener = { app ->
                 if (app.appPackage.isEmpty()) return@AppDrawerAdapter
+                
+                // Wenn eine App gewählt wird, muss die Kategorie für diesen Slot gelöscht werden
+                if (flag in Constants.FLAG_SET_HOME_APP_1..Constants.FLAG_SET_HOME_APP_8) {
+                    prefs.setHomeCategory(flag, null)
+                }
+
                 viewModel.selectedApp(app, flag)
                 val dest = if (flag == Constants.FLAG_LAUNCH_APP || flag == Constants.FLAG_HIDDEN_APPS) R.id.mainFragment else null
                 if (dest != null) findNavController().popBackStack(dest, false) else findNavController().popBackStack()
@@ -289,36 +339,17 @@ class AppDrawerFragment : Fragment() {
     }
 
     private fun checkMessageAndExit() {
+        if (isRemoving) return
+        binding.search.hideKeyboard()
         findNavController().popBackStack()
-        if (flag == Constants.FLAG_LAUNCH_APP) viewModel.checkForMessages()
     }
 
     private fun showKeyboardWithFocus() {
-        if (prefs.autoShowKeyboard && (currentCategory == "Alle" || currentCategory == "Unkategorisiert")) {
-            binding.search.post {
-                // Using AppCompat's internal ID via alias to avoid Unresolved Reference or Deprecation warnings
-                val searchEditText = binding.search.findViewById<View>(AppCompatR.id.search_src_text)
-                searchEditText?.requestFocus()
-                binding.search.postDelayed({
-                    if (isAdded && !isRemoving) {
-                        val imm = requireContext().getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
-                        imm.showSoftInput(searchEditText ?: binding.search, InputMethodManager.SHOW_IMPLICIT)
-                    }
-                }, 200)
-            }
+        if (isAdded && prefs.autoShowKeyboard) {
+            binding.search.requestFocus()
+            val imm = requireContext().getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+            imm.showSoftInput(binding.search.findViewById(AppCompatR.id.search_src_text), InputMethodManager.SHOW_IMPLICIT)
         }
-    }
-
-    override fun onResume() {
-        super.onResume()
-        if (flag == Constants.FLAG_LAUNCH_APP) {
-            showKeyboardWithFocus()
-        }
-    }
-
-    override fun onStop() {
-        binding.search.hideKeyboard()
-        super.onStop()
     }
 
     override fun onDestroyView() {

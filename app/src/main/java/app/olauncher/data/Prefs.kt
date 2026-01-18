@@ -72,6 +72,8 @@ class Prefs(context: Context) {
             putString("APP_PACKAGE_$index", app.appPackage)
             putString("APP_USER_$index", app.user.toString())
             putString("APP_ACTIVITY_CLASS_NAME_$index", app.activityClassName)
+            // Clear category when an app is set
+            remove("HOME_CATEGORY_$index")
         }
     }
 
@@ -83,6 +85,23 @@ class Prefs(context: Context) {
     fun getAppPackage(index: Int): String = prefs.getString("APP_PACKAGE_$index", "") ?: ""
     fun getAppUser(index: Int): String = prefs.getString("APP_USER_$index", "") ?: ""
     fun getAppActivityClassName(index: Int): String = prefs.getString("APP_ACTIVITY_CLASS_NAME_$index", "") ?: ""
+
+    fun setHomeCategory(index: Int, category: String?) {
+        prefs.edit {
+            if (category == null) {
+                remove("HOME_CATEGORY_$index")
+            } else {
+                putString("HOME_CATEGORY_$index", category)
+                // Clear app assignment when a category is set
+                remove("APP_NAME_$index")
+                remove("APP_PACKAGE_$index")
+                remove("APP_USER_$index")
+                remove("APP_ACTIVITY_CLASS_NAME_$index")
+            }
+        }
+    }
+
+    fun getHomeCategory(index: Int): String? = prefs.getString("HOME_CATEGORY_$index", null)
 
     fun setSideApp(index: Int, app: AppModel) {
         prefs.edit {

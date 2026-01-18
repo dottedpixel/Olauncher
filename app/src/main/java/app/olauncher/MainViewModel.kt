@@ -105,6 +105,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun selectedCategory(category: String, flag: Int) {
+        if (flag in Constants.FLAG_SET_HOME_APP_1..Constants.FLAG_SET_HOME_APP_8) {
+            prefs.setHomeCategory(flag, category)
+            refreshHome(false)
+        }
+    }
+
     fun firstOpen(value: Boolean) {
         _firstOpen.postValue(value)
     }

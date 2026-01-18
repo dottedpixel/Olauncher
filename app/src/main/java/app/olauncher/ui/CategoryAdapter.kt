@@ -7,10 +7,11 @@ import app.olauncher.databinding.AdapterCategoryItemBinding
 
 class CategoryAdapter(
     private val categories: List<String>,
+    initialCategory: String = categories.first(),
     private val onCategorySelected: (String) -> Unit
 ) : RecyclerView.Adapter<CategoryAdapter.ViewHolder>() {
 
-    private var selectedCategory: String = categories.first()
+    private var selectedCategory: String = initialCategory
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
         val binding = AdapterCategoryItemBinding.inflate(LayoutInflater.from(parent.context), parent, false)
