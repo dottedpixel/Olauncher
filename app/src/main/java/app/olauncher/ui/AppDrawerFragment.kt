@@ -12,6 +12,7 @@ import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.widget.SearchView
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.activityViewModels
+import androidx.lifecycle.lifecycleScope
 import androidx.navigation.fragment.findNavController
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
@@ -24,6 +25,10 @@ import app.olauncher.data.Prefs
 import app.olauncher.databinding.DialogEditCategoriesBinding
 import app.olauncher.databinding.FragmentAppDrawerBinding
 import app.olauncher.helper.*
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class AppDrawerFragment : Fragment() {
 
@@ -36,6 +41,7 @@ class AppDrawerFragment : Fragment() {
     private var canRename = false
     private var currentCategory = "Alle"
     private var fullAppList: List<AppModel> = emptyList()
+    private var filterJob: Job? = null
 
     private val viewModel: MainViewModel by activityViewModels()
     private var _binding: FragmentAppDrawerBinding? = null
@@ -146,6 +152,11 @@ class AppDrawerFragment : Fragment() {
                 viewModel.selectedCategory(category, flag)
                 findNavController().popBackStack()
             } else {
+                // Optimize Category Switching: clear search query focus and hide keyboard
+                binding.search.setQuery("", false)
+                binding.search.clearFocus()
+                binding.search.hideKeyboard()
+                
                 currentCategory = category
                 filterAppsByCategory()
             }
@@ -163,47 +174,75 @@ class AppDrawerFragment : Fragment() {
     }
 
     private fun filterAppsByCategory() {
-        val filtered = when (currentCategory) {
-            "Alle" -> fullAppList
-            "Unkategorisiert" -> fullAppList.filter { app ->
-                prefs.getAppCategories(app.appPackage).isEmpty()
+        if (_binding == null || !isAdded) return
+
+        // Alten Job abbrechen, falls noch einer läuft (verhindert Race Conditions)
+        filterJob?.cancel()
+
+        filterJob = lifecycleScope.launch(Dispatchers.Default) {
+            val filtered = when (currentCategory) {
+                "Alle" -> fullAppList
+                "Unkategorisiert" -> fullAppList.filter { app ->
+                    prefs.getAppCategories(app.appPackage).isEmpty()
+                }
+                else -> fullAppList.filter { app ->
+                    prefs.getAppCategories(app.appPackage).contains(currentCategory)
+                }
             }
-            else -> fullAppList.filter { app ->
-                prefs.getAppCategories(app.appPackage).contains(currentCategory)
+
+            withContext(Dispatchers.Main) {
+                if (_binding == null || !isAdded) return@withContext
+
+                // Animation entfernen um Layout-Fehler während des Updates zu vermeiden
+                binding.recyclerView.layoutAnimation = null 
+
+                // Daten im Adapter aktualisieren
+                // RecyclerView State Check
+                if (!binding.recyclerView.isComputingLayout) {
+                    adapter.setAppList(filtered.toMutableList())
+                    // WICHTIG: Filter erst anwenden, wenn die Liste im Adapter sicher gesetzt ist
+                    applySearchFilter() 
+                } else {
+                    binding.recyclerView.post {
+                        if (_binding != null) {
+                            adapter.setAppList(filtered.toMutableList())
+                            applySearchFilter()
+                        }
+                    }
+                }
             }
         }
-        
-        // 1. Animation sofort entfernen
-        binding.recyclerView.layoutAnimation = null 
-        
-        // 2. Daten im Adapter aktualisieren
-        adapter.setAppList(filtered.toMutableList())
-        
-        // 3. Den Filter-Vorgang starten
-        adapter.filter.filter(binding.search.query) {
+    }
+
+    private fun applySearchFilter() {
+        val query = binding.search.query
+        adapter.filter.filter(query) {
+            if (_binding == null || !isAdded) return@filter
             // Dieser Callback kommt, wenn der Filter fertig ist.
             // Wir nutzen .post {}, um sicherzugehen, dass die RecyclerView 
             // die neuen Items bereits intern verarbeitet hat.
             binding.recyclerView.post {
+                if (_binding == null) return@post
                 linearLayoutManager.scrollToPositionWithOffset(0, 0)
-                
-                // 4. Animation erst nach dem Scrollen (optional) wieder aktivieren
+
+                // Animation erst nach dem Scrollen (optional) wieder aktivieren
                 if (isAdded && !requireContext().isEinkDisplay()) {
                     binding.recyclerView.postDelayed({
-                        if (isAdded) {
+                        if (isAdded && _binding != null) {
                             binding.recyclerView.layoutAnimation = AnimationUtils.loadLayoutAnimation(
                                 requireContext(), R.anim.layout_anim_from_bottom
                             )
                         }
-                    }, 100) // Kurze Verzögerung, damit das Scrollen Vorrang hat
+                    }, 100)
+                }
+
+                // Tastatur-Logik nach dem Filtern
+                if (currentCategory == "Alle" || currentCategory == "Unkategorisiert") {
+                    showKeyboardWithFocus()
+                } else {
+                    binding.search.hideKeyboard()
                 }
             }
-        }
-
-        if (currentCategory == "Alle" || currentCategory == "Unkategorisiert") {
-            showKeyboardWithFocus()
-        } else {
-            binding.search.hideKeyboard()
         }
     }
 
@@ -399,6 +438,7 @@ class AppDrawerFragment : Fragment() {
 
     override fun onDestroyView() {
         super.onDestroyView()
+        filterJob?.cancel()
         _binding = null
     }
 }
