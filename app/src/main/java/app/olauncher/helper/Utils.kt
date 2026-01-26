@@ -290,9 +290,16 @@ suspend fun setWallpaper(appContext: Context, url: String): Boolean {
 
 fun getScreenDimensions(context: Context): Pair<Int, Int> {
     val windowManager = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
-    val point = Point()
-    windowManager.defaultDisplay.getRealSize(point)
-    return Pair(point.x, point.y)
+    return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+        val metrics = windowManager.currentWindowMetrics
+        val bounds = metrics.bounds
+        Pair(bounds.width(), bounds.height())
+    } else {
+        val point = Point()
+        @Suppress("DEPRECATION")
+        windowManager.defaultDisplay.getRealSize(point)
+        Pair(point.x, point.y)
+    }
 }
 
 suspend fun getTodaysWallpaper(wallType: String, firstOpenTime: Long): String {
