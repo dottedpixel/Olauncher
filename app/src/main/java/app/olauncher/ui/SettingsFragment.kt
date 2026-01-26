@@ -285,28 +285,6 @@ class SettingsFragment : Fragment(), View.OnClickListener, View.OnLongClickListe
         viewModel.updateSwipeApps.observe(viewLifecycleOwner) {
             populateSwipeApps()
         }
-
-        // Der korrigierte Block für Lambda $4:
-        viewModel.showDialog.observe(viewLifecycleOwner) { dialogType ->
-            dialogType?.let {
-                when (it) {
-                    Constants.Dialog.ABOUT -> {
-                        // Dies öffnet die Olauncher GitHub/Website
-                        requireContext().openUrl(Constants.URL_ABOUT_OLAUNCHER)
-                    }
-                    // Wir entfernen die fehlerhafte Pro-Navigation und
-                    // ersetzen sie durch einen Platzhalter oder entfernen sie ganz,
-                    // falls dein Fork keine Pro-Features hat.
-                    else -> {
-                        // Optional: Logge den Typ für Debugging
-                        android.util.Log.d("Olauncher", "Dialog requested: $it")
-                    }
-                }
-                // WICHTIG: Setze den Wert auf null, um das Event zu "verbrauchen"
-                // Das löst das Problem, dass der Dialog bei Rotation erneut erscheint.
-                viewModel.showDialog.value = null
-            }
-        }
     }
 
     private fun toggleSwipeLeft() {
@@ -457,29 +435,20 @@ class SettingsFragment : Fragment(), View.OnClickListener, View.OnLongClickListe
         if (!prefs.dailyWallpaper) return
         prefs.dailyWallpaper = false
         populateWallpaperText()
-        // Try these names if the others fail:
-        // viewModel.stopWallpaperWork() or viewModel.cancelWallpaperWork()
         viewModel.cancelWallpaperWorker()
     }
 
     private fun toggleDailyWallpaperUpdate() {
-        val isDefault = viewModel.isOlauncherDefault.value ?: false
-
-        if (!prefs.dailyWallpaper && !isDefault) {
-            // FIXED: Removed safe calls/extra logic that triggered the 'String' error
-            val message = getString(R.string.set_as_default_launcher_first)
-            requireContext().showToast(message)
+        if (prefs.dailyWallpaper.not() && viewModel.isOlauncherDefault.value == false) {
+            requireContext().showToast(R.string.set_as_default_launcher_first)
             return
         }
-
         prefs.dailyWallpaper = !prefs.dailyWallpaper
         populateWallpaperText()
-
         if (prefs.dailyWallpaper) {
             viewModel.setWallpaperWorker()
-        } else {
-            viewModel.cancelWallpaperWorker()
-        }
+            showWallpaperToasts()
+        } else viewModel.cancelWallpaperWorker()
     }
 
     private fun showWallpaperToasts() {
